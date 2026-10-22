@@ -166,57 +166,59 @@ export default function DetectStudio() {
 
       {/* TOP HEADER */}
       <header className={styles.header}>
-        <Link href="/" className={styles.logoArea}>
-          <div className={styles.logoIconWrapper}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2L3 7V12C3 17.5 7 21.5 12 23C17 21.5 21 17.5 21 12V7L12 2Z"
-                fill="url(#detectShieldGrad)"
-                stroke="#38bdf8"
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-              />
-              <circle cx="12" cy="11" r="3.2" fill="#ffffff" />
-              <path
-                d="M7.5 18C8.5 15.5 10.2 14.5 12 14.5C13.8 14.5 15.5 15.5 16.5 18"
-                stroke="#ffffff"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-              <defs>
-                <linearGradient id="detectShieldGrad" x1="3" y1="2" x2="21" y2="23" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#3b82f6" />
-                  <stop offset="1" stopColor="#8b5cf6" />
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-          <span className={styles.logoText}>SAGE</span>
-        </Link>
-
-        <nav>
-          <ul className={styles.navLinks}>
-            <li className={styles.navItem}><Link href="/">Home</Link></li>
-            <li className={`${styles.navItem} ${styles.navItemActive}`}>Detect Studio</li>
-            <li className={styles.navItem}><Link href="/#how-it-works">How it Works</Link></li>
-            <li className={styles.navItem}><Link href="/#features">Features</Link></li>
-            <li className={styles.navItem}><Link href="/#about">About</Link></li>
-          </ul>
-        </nav>
-
-        <div className={styles.headerRight}>
-          <div className={styles.modelBadge}>
-            <span className={styles.modelBadgeDot} />
-            <span>SAGE v1.0 • Ready</span>
-          </div>
-
-          <Link href="/" className={styles.backHomeBtn}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="19" y1="12" x2="5" y2="12"></line>
-              <polyline points="12 19 5 12 12 5"></polyline>
-            </svg>
-            <span>Back to Home</span>
+        <div className={styles.headerInner}>
+          <Link href="/" className={styles.logoArea}>
+            <div className={styles.logoIconWrapper}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 2L3 7V12C3 17.5 7 21.5 12 23C17 21.5 21 17.5 21 12V7L12 2Z"
+                  fill="url(#detectShieldGrad)"
+                  stroke="#38bdf8"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+                <circle cx="12" cy="11" r="3.2" fill="#ffffff" />
+                <path
+                  d="M7.5 18C8.5 15.5 10.2 14.5 12 14.5C13.8 14.5 15.5 15.5 16.5 18"
+                  stroke="#ffffff"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+                <defs>
+                  <linearGradient id="detectShieldGrad" x1="3" y1="2" x2="21" y2="23" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#3b82f6" />
+                    <stop offset="1" stopColor="#8b5cf6" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <span className={styles.logoText}>SAGE</span>
           </Link>
+
+          <nav>
+            <ul className={styles.navLinks}>
+              <li className={styles.navItem}><Link href="/">Home</Link></li>
+              <li className={`${styles.navItem} ${styles.navItemActive}`}>Detect Studio</li>
+              <li className={styles.navItem}><Link href="/#how-it-works">How it Works</Link></li>
+              <li className={styles.navItem}><Link href="/#features">Features</Link></li>
+              <li className={styles.navItem}><Link href="/#about">About</Link></li>
+            </ul>
+          </nav>
+
+          <div className={styles.headerRight}>
+            <div className={styles.modelBadge}>
+              <span className={styles.modelBadgeDot} />
+              <span>SAGE v1.0 • Ready</span>
+            </div>
+
+            <Link href="/" className={styles.backHomeBtn}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+              <span>Back to Home</span>
+            </Link>
+          </div>
         </div>
       </header>
 

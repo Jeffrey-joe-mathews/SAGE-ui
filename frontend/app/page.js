@@ -138,82 +138,84 @@ export default function Home() {
 
       {/* TOP NAVBAR */}
       <header className={styles.header}>
-        <div className={styles.logoArea} onClick={() => setActiveTab("Home")}>
-          <div className={styles.logoIconWrapper}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2L3 7V12C3 17.5 7 21.5 12 23C17 21.5 21 17.5 21 12V7L12 2Z"
-                fill="url(#shieldGrad)"
-                stroke="#38bdf8"
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-              />
-              <circle cx="12" cy="11" r="3.2" fill="#ffffff" />
-              <path
-                d="M7.5 18C8.5 15.5 10.2 14.5 12 14.5C13.8 14.5 15.5 15.5 16.5 18"
-                stroke="#ffffff"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-              <defs>
-                <linearGradient id="shieldGrad" x1="3" y1="2" x2="21" y2="23" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#3b82f6" />
-                  <stop offset="1" stopColor="#8b5cf6" />
-                </linearGradient>
-              </defs>
-            </svg>
+        <div className={styles.headerInner}>
+          <div className={styles.logoArea} onClick={() => setActiveTab("Home")}>
+            <div className={styles.logoIconWrapper}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 2L3 7V12C3 17.5 7 21.5 12 23C17 21.5 21 17.5 21 12V7L12 2Z"
+                  fill="url(#shieldGrad)"
+                  stroke="#38bdf8"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+                <circle cx="12" cy="11" r="3.2" fill="#ffffff" />
+                <path
+                  d="M7.5 18C8.5 15.5 10.2 14.5 12 14.5C13.8 14.5 15.5 15.5 16.5 18"
+                  stroke="#ffffff"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+                <defs>
+                  <linearGradient id="shieldGrad" x1="3" y1="2" x2="21" y2="23" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#3b82f6" />
+                    <stop offset="1" stopColor="#8b5cf6" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <span className={styles.logoText}>SAGE</span>
           </div>
-          <span className={styles.logoText}>SAGE</span>
+
+          <nav>
+            <ul className={styles.navLinks}>
+              <li
+                className={`${styles.navItem} ${activeTab === "Home" ? styles.navItemActive : ""}`}
+                onClick={() => setActiveTab("Home")}
+              >
+                Home
+              </li>
+              <li
+                className={styles.navItem}
+                onClick={() => {
+                  setActiveTab("How it Works");
+                  document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                How it Works
+              </li>
+              <li className={styles.navItem}>
+                <Link href="/detect">Try It</Link>
+              </li>
+              <li
+                className={styles.navItem}
+                onClick={() => {
+                  setActiveTab("Features");
+                  document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                Features
+              </li>
+              <li
+                className={styles.navItem}
+                onClick={() => {
+                  setActiveTab("About");
+                  document.getElementById("about")?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                About
+              </li>
+            </ul>
+          </nav>
+
+          <Link href="/detect" className={styles.navCta}>
+            <span>Get Started</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </Link>
         </div>
-
-        <nav>
-          <ul className={styles.navLinks}>
-            <li
-              className={`${styles.navItem} ${activeTab === "Home" ? styles.navItemActive : ""}`}
-              onClick={() => setActiveTab("Home")}
-            >
-              Home
-            </li>
-            <li
-              className={styles.navItem}
-              onClick={() => {
-                setActiveTab("How it Works");
-                document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
-              }}
-            >
-              How it Works
-            </li>
-            <li className={styles.navItem}>
-              <Link href="/detect">Try It</Link>
-            </li>
-            <li
-              className={styles.navItem}
-              onClick={() => {
-                setActiveTab("Features");
-                document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
-              }}
-            >
-              Features
-            </li>
-            <li
-              className={styles.navItem}
-              onClick={() => {
-                setActiveTab("About");
-                document.getElementById("about")?.scrollIntoView({ behavior: "smooth" });
-              }}
-            >
-              About
-            </li>
-          </ul>
-        </nav>
-
-        <Link href="/detect" className={styles.navCta}>
-          <span>Get Started</span>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-            <polyline points="12 5 19 12 12 19"></polyline>
-          </svg>
-        </Link>
       </header>
 
       {/* HERO SECTION */}

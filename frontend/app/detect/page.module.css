@@ -43,14 +43,21 @@
   top: 0;
   z-index: 50;
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 48px;
-  background: rgba(6, 8, 19, 0.8);
+  padding: 16px 0;
+  background: rgba(6, 8, 19, 0.85);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.headerInner {
+  max-width: 1360px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .logoArea {
@@ -170,25 +177,25 @@
 .mainWorkspace {
   position: relative;
   z-index: 10;
-  max-width: 1400px;
+  max-width: 1360px;
   width: 100%;
   margin: 0 auto;
-  padding: 36px 36px 60px;
+  padding: 32px 32px 60px;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 28px;
 }
 
 .studioBanner {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-width: 800px;
+  gap: 10px;
+  max-width: 820px;
 }
 
 .studioHeading {
   font-family: var(--font-display);
-  font-size: 42px;
+  font-size: 40px;
   font-weight: 800;
   line-height: 1.15;
   letter-spacing: -0.02em;
@@ -196,7 +203,7 @@
 }
 
 .studioSubtitle {
-  font-size: 16px;
+  font-size: 15.5px;
   line-height: 1.6;
   color: #94a3b8;
 }
@@ -204,16 +211,19 @@
 /* Workspace 2-Column Grid */
 .workspaceGrid {
   display: grid;
-  grid-template-columns: 1.05fr 1.2fr;
-  gap: 32px;
+  grid-template-columns: 430px minmax(0, 1fr);
+  gap: 28px;
   align-items: start;
+  width: 100%;
 }
 
 /* Left Column: Upload Console */
 .uploadConsole {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+  min-width: 0;
+  width: 100%;
 }
 
 .consolePanel {
@@ -258,16 +268,17 @@
   border: 2px dashed rgba(139, 92, 246, 0.35);
   border-radius: 16px;
   background: rgba(139, 92, 246, 0.03);
-  padding: 36px 20px;
+  padding: 24px 18px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 12px;
+  gap: 10px;
   cursor: pointer;
   transition: all 0.25s ease;
   position: relative;
+  box-sizing: border-box;
 }
 
 .dropzone:hover, .dropzoneActive {
@@ -465,14 +476,19 @@
 .diagnosticConsole {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
 }
 
 /* Video Player Display Container */
 .playerCard {
   position: relative;
   width: 100%;
+  max-width: 100%;
   aspect-ratio: 16 / 10;
+  max-height: 480px;
   border-radius: 20px;
   overflow: hidden;
   background: #080c1d;
@@ -481,12 +497,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
 }
 
 .playerMedia {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center 25%;
 }
 
 /* HUD Overlay on Video Player */
@@ -499,12 +517,15 @@
   justify-content: space-between;
   padding: 16px;
   background: linear-gradient(180deg, rgba(6, 8, 19, 0.6) 0%, transparent 35%, transparent 65%, rgba(6, 8, 19, 0.7) 100%);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .hudTopBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
 }
 
 .hudChip {
@@ -530,10 +551,10 @@
 /* Face Tracker Bounding Box */
 .faceBoundingBox {
   position: absolute;
-  top: 20%;
-  left: 28%;
-  width: 44%;
-  height: 58%;
+  top: 12%;
+  left: 30%;
+  width: 40%;
+  height: 74%;
   border: 2px solid #38bdf8;
   border-radius: 12px;
   box-shadow: 0 0 15px rgba(56, 189, 248, 0.5), inset 0 0 15px rgba(56, 189, 248, 0.2);
@@ -542,6 +563,8 @@
   justify-content: space-between;
   padding: 8px;
   animation: boxBreath 3s infinite ease-in-out;
+  box-sizing: border-box;
+  pointer-events: none;
 }
 
 @keyframes boxBreath {
@@ -594,10 +617,14 @@
   background: rgba(13, 17, 37, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
-  padding: 16px 20px;
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .timelineHeader {
@@ -612,11 +639,28 @@
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding: 4px 0 8px;
+  overflow-y: hidden;
+  width: 100%;
+  padding: 4px 2px 8px;
+  scroll-behavior: smooth;
 }
 
 .framesTrack::-webkit-scrollbar {
-  height: 4px;
+  height: 5px;
+}
+
+.framesTrack::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+}
+
+.framesTrack::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.35);
+  border-radius: 3px;
+}
+
+.framesTrack::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.7);
 }
 
 .frameThumbnailBox {
@@ -696,6 +740,9 @@
   gap: 18px;
   box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.7);
   animation: fadeIn 0.3s ease;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .verdictFake {
@@ -763,16 +810,19 @@
 /* Forensic Telemetry Matrix */
 .telemetryGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   padding-top: 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .telemetryItem {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .telemetryLabel {
