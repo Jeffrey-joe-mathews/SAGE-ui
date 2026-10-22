@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -9,11 +10,6 @@ export default function Home() {
   const [isDragging, setIsDragging] = useState(false);
   const [isAutoScanning, setIsAutoScanning] = useState(true);
   const [activeFrameIndex, setActiveFrameIndex] = useState(14);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [selectedSample, setSelectedSample] = useState("deepfake");
 
   const visualRef = useRef(null);
   const posRef = useRef(50);
@@ -133,47 +129,6 @@ export default function Home() {
     };
   }, [isDragging]);
 
-  // Run Simulated SAGE Inference Pipeline
-  const runSimulatedInference = (sampleType) => {
-    setIsAnalyzing(true);
-    setAnalysisProgress(10);
-    setAnalysisResult(null);
-
-    const stepInterval = setInterval(() => {
-      setAnalysisProgress((prev) => {
-        if (prev >= 95) {
-          clearInterval(stepInterval);
-          setTimeout(() => {
-            setIsAnalyzing(false);
-            if (sampleType === "real") {
-              setAnalysisResult({
-                label: "REAL",
-                confidence: "99.1%",
-                latency: "142.8 ms",
-                semanticScore: "0.98",
-                forensicNoise: "Low (0.04)",
-                gateAlpha: "0.82",
-                details: "No spatial tampering or frequency anomalies detected across 30 MTCNN frames.",
-              });
-            } else {
-              setAnalysisResult({
-                label: "FAKE",
-                confidence: "98.3%",
-                latency: "146.2 ms",
-                semanticScore: "0.41",
-                forensicNoise: "High (0.89)",
-                gateAlpha: "0.29",
-                details: "Bayar filter detected high-pass frequency boundary seams and DINOv2 temporal flicker.",
-              });
-            }
-          }, 350);
-          return 100;
-        }
-        return prev + 20;
-      });
-    }, 120);
-  };
-
   return (
     <div className={styles.container}>
       {/* Ambient glowing backdrops */}
@@ -213,37 +168,52 @@ export default function Home() {
 
         <nav>
           <ul className={styles.navLinks}>
-            {["Home", "How it Works", "Try It", "Features", "About"].map((item) => (
-              <li
-                key={item}
-                className={`${styles.navItem} ${activeTab === item ? styles.navItemActive : ""}`}
-                onClick={() => {
-                  setActiveTab(item);
-                  if (item === "Try It") setIsModalOpen(true);
-                  if (item === "How it Works") {
-                    document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
-                  }
-                  if (item === "Features") {
-                    document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
-                  }
-                  if (item === "About") {
-                    document.getElementById("about")?.scrollIntoView({ behavior: "smooth" });
-                  }
-                }}
-              >
-                {item}
-              </li>
-            ))}
+            <li
+              className={`${styles.navItem} ${activeTab === "Home" ? styles.navItemActive : ""}`}
+              onClick={() => setActiveTab("Home")}
+            >
+              Home
+            </li>
+            <li
+              className={styles.navItem}
+              onClick={() => {
+                setActiveTab("How it Works");
+                document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              How it Works
+            </li>
+            <li className={styles.navItem}>
+              <Link href="/detect">Try It</Link>
+            </li>
+            <li
+              className={styles.navItem}
+              onClick={() => {
+                setActiveTab("Features");
+                document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              Features
+            </li>
+            <li
+              className={styles.navItem}
+              onClick={() => {
+                setActiveTab("About");
+                document.getElementById("about")?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              About
+            </li>
           </ul>
         </nav>
 
-        <button className={styles.navCta} onClick={() => setIsModalOpen(true)}>
+        <Link href="/detect" className={styles.navCta}>
           <span>Get Started</span>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="5" y1="12" x2="19" y2="12"></line>
             <polyline points="12 5 19 12 12 19"></polyline>
           </svg>
-        </button>
+        </Link>
       </header>
 
       {/* HERO SECTION */}
@@ -268,7 +238,7 @@ export default function Home() {
           </p>
 
           <div className={styles.heroActions}>
-            <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
+            <Link href="/detect" className="btn-primary">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                 <polyline points="17 8 12 3 7 8"></polyline>
@@ -279,7 +249,7 @@ export default function Home() {
                 <line x1="5" y1="12" x2="19" y2="12"></line>
                 <polyline points="12 5 19 12 12 19"></polyline>
               </svg>
-            </button>
+            </Link>
 
             <button
               className="btn-secondary"
@@ -478,7 +448,7 @@ export default function Home() {
       <section className={styles.processBannerWrapper}>
         <div className={styles.processBanner}>
           {/* Step 1 */}
-          <div className={styles.stepCard}>
+          <Link href="/detect" className={styles.stepCard} style={{ cursor: "pointer" }}>
             <div
               className={styles.stepIconCircle}
               style={{
@@ -495,7 +465,7 @@ export default function Home() {
             </div>
             <h3 className={styles.stepTitle}>Upload a Video</h3>
             <p className={styles.stepDesc}>Simply upload a video and let SAGE analyze it.</p>
-          </div>
+          </Link>
 
           <span className={styles.stepDividerChevron}>›</span>
 
@@ -688,155 +658,6 @@ export default function Home() {
           <span>FaceForensics++ MTCNN Evaluation • 30 Frames Sequence</span>
         </div>
       </footer>
-
-      {/* INTERACTIVE VIDEO UPLOAD / SCANNER MODAL */}
-      {isModalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsModalOpen(false)}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div className={styles.logoIconWrapper} style={{ width: "30px", height: "30px" }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2L3 7V12C3 17.5 7 21.5 12 23C17 21.5 21 17.5 21 12V7L12 2Z" fill="url(#modalShield)" />
-                    <defs>
-                      <linearGradient id="modalShield" x1="3" y1="2" x2="21" y2="23">
-                        <stop stopColor="#3b82f6" />
-                        <stop offset="1" stopColor="#8b5cf6" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                </div>
-                <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#ffffff" }}>
-                  SAGE Neural Video Analyzer
-                </h3>
-              </div>
-              <button className={styles.modalCloseBtn} onClick={() => setIsModalOpen(false)}>
-                &times;
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              {/* Sample selection */}
-              <div className={styles.sampleSelector}>
-                <span style={{ fontSize: "13px", color: "#94a3b8" }}>Select a sample or drop a custom video:</span>
-                <div className={styles.samplePills}>
-                  <button
-                    className={`${styles.sampleBtn} ${selectedSample === "deepfake" ? styles.sampleBtnActive : ""}`}
-                    onClick={() => {
-                      setSelectedSample("deepfake");
-                      setAnalysisResult(null);
-                    }}
-                  >
-                    <span>🔴 Sample Deepfake (FaceSwap)</span>
-                  </button>
-                  <button
-                    className={`${styles.sampleBtn} ${selectedSample === "real" ? styles.sampleBtnActive : ""}`}
-                    onClick={() => {
-                      setSelectedSample("real");
-                      setAnalysisResult(null);
-                    }}
-                  >
-                    <span>🟢 Sample Real Video (Original)</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Upload Dropzone */}
-              <div
-                className={styles.uploadDropzone}
-                onClick={() => runSimulatedInference(selectedSample)}
-              >
-                <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(139, 92, 246, 0.2)", display: "flex", alignItems: "center", justifyContent: "center", color: "#c084fc" }}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="17 8 12 3 7 8"></polyline>
-                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                  </svg>
-                </div>
-                <div style={{ textAlign: "center" }}>
-                  <p style={{ color: "#ffffff", fontWeight: "600", fontSize: "15px" }}>
-                    {isAnalyzing ? "Processing 30 Video Frames..." : "Click to Analyze Selected Video"}
-                  </p>
-                  <p style={{ color: "#64748b", fontSize: "13px", marginTop: "4px" }}>
-                    Supports MP4, MOV, WebM or sequences (MTCNN 224x224 crops)
-                  </p>
-                </div>
-              </div>
-
-              {/* Progress bar during analysis */}
-              {isAnalyzing && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#94a3b8" }}>
-                    <span>Pipeline: MTCNN ➔ DINOv2 Semantics ➔ Bayar Conv ➔ Gate</span>
-                    <span>{analysisProgress}%</span>
-                  </div>
-                  <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.1)", borderRadius: "999px", overflow: "hidden" }}>
-                    <div style={{ width: `${analysisProgress}%`, height: "100%", background: "linear-gradient(90deg, #3b82f6, #a855f7, #f43f5e)", transition: "width 0.2s ease" }} />
-                  </div>
-                </div>
-              )}
-
-              {/* Analysis Results Display */}
-              {analysisResult && (
-                <div
-                  style={{
-                    padding: "20px",
-                    borderRadius: "16px",
-                    background: analysisResult.label === "FAKE" ? "rgba(244, 63, 94, 0.12)" : "rgba(16, 185, 129, 0.12)",
-                    border: `1px solid ${analysisResult.label === "FAKE" ? "#f43f5e" : "#10b981"}`,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "14px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <span
-                        style={{
-                          padding: "6px 14px",
-                          borderRadius: "8px",
-                          fontWeight: "800",
-                          fontFamily: "var(--font-display)",
-                          fontSize: "14px",
-                          background: analysisResult.label === "FAKE" ? "#f43f5e" : "#10b981",
-                          color: "#ffffff",
-                        }}
-                      >
-                        {analysisResult.label}
-                      </span>
-                      <span style={{ fontSize: "16px", fontWeight: "700", color: "#ffffff" }}>
-                        Confidence: {analysisResult.confidence}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: "13px", color: "#94a3b8" }}>
-                      Latency: <strong style={{ color: "#ffffff" }}>{analysisResult.latency}</strong>
-                    </span>
-                  </div>
-
-                  <p style={{ fontSize: "13.5px", color: "#cbd5e1", lineHeight: "1.5" }}>
-                    {analysisResult.details}
-                  </p>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", paddingTop: "8px", borderTop: "1px solid rgba(255, 255, 255, 0.08)" }}>
-                    <div>
-                      <span style={{ fontSize: "11px", color: "#64748b" }}>Semantic Score</span>
-                      <div style={{ fontWeight: "700", color: "#38bdf8" }}>{analysisResult.semanticScore}</div>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: "11px", color: "#64748b" }}>Forensic Artifacts</span>
-                      <div style={{ fontWeight: "700", color: "#f43f5e" }}>{analysisResult.forensicNoise}</div>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: "11px", color: "#64748b" }}>Gating Blending (α)</span>
-                      <div style={{ fontWeight: "700", color: "#c084fc" }}>{analysisResult.gateAlpha}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
