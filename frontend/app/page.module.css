@@ -308,36 +308,83 @@
   pointer-events: none;
 }
 
+.imageLayerReal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  clip-path: polygon(0 0, var(--slider-pos, 50%) 0, var(--slider-pos, 50%) 100%, 0 100%);
+  will-change: clip-path;
+}
+
 /* Digital artifact matrix overlay on the Fake side */
 .glitchGridOverlay {
   position: absolute;
   top: 0;
+  left: 0;
   right: 0;
   bottom: 0;
   pointer-events: none;
   background-image: 
-    linear-gradient(rgba(244, 63, 94, 0.18) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(244, 63, 94, 0.18) 1px, transparent 1px);
+    linear-gradient(rgba(244, 63, 94, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(244, 63, 94, 0.22) 1px, transparent 1px);
   background-size: 14px 14px;
   mix-blend-mode: color-dodge;
-  opacity: 0.65;
+  opacity: 0.75;
+  clip-path: polygon(var(--slider-pos, 50%) 0, 100% 0, 100% 100%, var(--slider-pos, 50%) 100%);
+  will-change: clip-path;
 }
 
-/* Laser Divider Line */
+/* Laser Divider Line - Smooth Sweeping Scanner */
 .laserDivider {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 2px;
-  background: linear-gradient(180deg, #38bdf8 0%, #a855f7 50%, #f43f5e 100%);
-  box-shadow: 0 0 12px #38bdf8, 0 0 24px #f43f5e;
+  width: 3px;
+  left: var(--slider-pos, 50%);
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #38bdf8 0%, #c084fc 45%, #ec4899 75%, #f43f5e 100%);
+  box-shadow: 
+    0 0 10px #38bdf8,
+    0 0 20px rgba(192, 132, 252, 0.8),
+    0 0 35px rgba(244, 63, 94, 0.9);
   z-index: 25;
   cursor: ew-resize;
-  transition: box-shadow 0.2s ease;
+  will-change: left;
+  transition: box-shadow 0.25s ease;
+}
+
+.laserDivider::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -20px;
+  right: -20px;
+  background: radial-gradient(ellipse at center, rgba(168, 85, 247, 0.22) 0%, transparent 75%);
+  pointer-events: none;
+  animation: laserPulseGlow 3s ease-in-out infinite;
+}
+
+@keyframes laserPulseGlow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scaleX(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.3);
+  }
 }
 
 .laserDivider:hover {
-  box-shadow: 0 0 20px #38bdf8, 0 0 35px #f43f5e;
+  box-shadow: 
+    0 0 15px #38bdf8,
+    0 0 30px rgba(192, 132, 252, 1),
+    0 0 45px rgba(244, 63, 94, 1);
 }
 
 .laserHandle {
@@ -345,17 +392,91 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  background: #0c1024;
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.6), 0 0 25px #a855f7;
+  background: radial-gradient(circle at center, #1b2144 0%, #080c1e 100%);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 
+    0 0 15px rgba(255, 255, 255, 0.7),
+    0 0 25px #a855f7,
+    0 0 40px rgba(56, 189, 248, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  font-size: 12px;
+  font-size: 13px;
+  cursor: ew-resize;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+  user-select: none;
+  touch-action: none;
+}
+
+.laserHandle:hover,
+.laserHandleActive {
+  transform: translate(-50%, -50%) scale(1.18);
+  box-shadow: 
+    0 0 22px rgba(255, 255, 255, 0.9),
+    0 0 35px #ec4899,
+    0 0 55px rgba(56, 189, 248, 0.9);
+}
+
+/* Auto-scanner status pill */
+.scannerStatusBadge {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 32;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  background: rgba(10, 15, 34, 0.75);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.scannerStatusBadge:hover {
+  background: rgba(18, 25, 55, 0.9);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #ffffff;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.scannerDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  animation: scannerDotPulse 1.8s infinite;
+}
+
+.scannerDotPaused {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+  animation: none;
+}
+
+@keyframes scannerDotPulse {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
 }
 
 /* REAL / FAKE Badges */
@@ -520,8 +641,30 @@
 .confidenceFill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #f43f5e 0%, #ec4899 100%);
-  box-shadow: 0 0 10px rgba(244, 63, 94, 0.8);
+  background: linear-gradient(
+    90deg,
+    #f43f5e 0%,
+    #fb7185 20%,
+    #ec4899 45%,
+    #fda4af 60%,
+    #f43f5e 80%,
+    #fb7185 100%
+  );
+  background-size: 200% 100%;
+  box-shadow: 
+    0 0 10px rgba(244, 63, 94, 0.8),
+    0 0 20px rgba(236, 72, 153, 0.4);
+  animation: confidenceFlow 2.4s linear infinite;
+  will-change: background-position;
+}
+
+@keyframes confidenceFlow {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* Bottom 30-Frame Filmstrip */

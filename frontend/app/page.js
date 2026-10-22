@@ -6,16 +6,74 @@ import styles from "./page.module.css";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("Home");
-  const [sliderPos, setSliderPos] = useState(50); // percentage 0 - 100
   const [isDragging, setIsDragging] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAutoScanning, setIsAutoScanning] = useState(true);
   const [activeFrameIndex, setActiveFrameIndex] = useState(14);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [selectedSample, setSelectedSample] = useState("deepfake");
 
   const visualRef = useRef(null);
+  const posRef = useRef(50);
+  const animFrameRef = useRef(null);
+  const lastTimeRef = useRef(null);
+  const phaseRef = useRef(0);
+  const resumeTimerRef = useRef(null);
+
+  const filmFrames = [
+    0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 29
+  ];
+
+  // Initialize CSS property on mount
+  useEffect(() => {
+    if (visualRef.current) {
+      visualRef.current.style.setProperty("--slider-pos", "50%");
+    }
+  }, []);
+
+  // Buttery-smooth 60/120 FPS continuous sinusoidal sweep loop
+  useEffect(() => {
+    const period = 4800; // 4.8 seconds per full cycle
+    const amplitude = 26; // sweeps smoothly between 24% and 76%
+    const center = 50;
+
+    const tick = (now) => {
+      if (lastTimeRef.current === null) {
+        lastTimeRef.current = now;
+      }
+      const delta = now - lastTimeRef.current;
+      lastTimeRef.current = now;
+
+      if (isAutoScanning && !isDragging) {
+        // Continuous harmonic oscillator
+        phaseRef.current = (phaseRef.current + (delta / period) * 2 * Math.PI) % (2 * Math.PI);
+        const newPos = center + amplitude * Math.sin(phaseRef.current);
+        posRef.current = newPos;
+
+        if (visualRef.current) {
+          visualRef.current.style.setProperty("--slider-pos", `${newPos.toFixed(3)}%`);
+        }
+
+        // Synchronize active video frame in the filmstrip
+        const normalized = Math.max(0, Math.min(1, (newPos - 20) / 60));
+        const frameIdx = Math.min(
+          filmFrames.length - 1,
+          Math.max(0, Math.floor(normalized * filmFrames.length))
+        );
+        setActiveFrameIndex(frameIdx);
+      }
+
+      animFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    animFrameRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [isAutoScanning, isDragging]);
 
   // Handle Dragging for Face Split Slider
   const handleMove = (clientX) => {
@@ -23,7 +81,19 @@ export default function Home() {
     const rect = visualRef.current.getBoundingClientRect();
     const x = clientX - rect.left;
     const clamped = Math.max(5, Math.min(95, (x / rect.width) * 100));
-    setSliderPos(clamped);
+    posRef.current = clamped;
+    visualRef.current.style.setProperty("--slider-pos", `${clamped.toFixed(2)}%`);
+
+    // Synchronize phase so it resumes smoothly from user position without jumping
+    const normalized = Math.max(-1, Math.min(1, (clamped - 50) / 26));
+    phaseRef.current = Math.asin(normalized);
+
+    const frameNormalized = Math.max(0, Math.min(1, (clamped - 20) / 60));
+    const frameIdx = Math.min(
+      filmFrames.length - 1,
+      Math.max(0, Math.floor(frameNormalized * filmFrames.length))
+    );
+    setActiveFrameIndex(frameIdx);
   };
 
   const handleTouchMove = (e) => {
@@ -40,6 +110,12 @@ export default function Home() {
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    // Smoothly resume auto-scan after 1.4 seconds of inactivity
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = setTimeout(() => {
+      lastTimeRef.current = null;
+      setIsAutoScanning(true);
+    }, 1400);
   };
 
   useEffect(() => {
@@ -97,10 +173,6 @@ export default function Home() {
       });
     }, 120);
   };
-
-  const filmFrames = [
-    0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 29
-  ];
 
   return (
     <div className={styles.container}>
@@ -329,47 +401,56 @@ export default function Home() {
                 className={styles.imageLayerFake}
               />
 
-              {/* Digital artifact pixelation overlay on the fake area */}
-              <div
-                className={styles.glitchGridOverlay}
-                style={{ left: `${sliderPos}%` }}
+              {/* Real Face (Clipped Layer - Left Side, GPU-accelerated clip-path) */}
+              <Image
+                src="/assets/portrait_real.jpg"
+                alt="Face portrait original"
+                fill
+                priority
+                className={styles.imageLayerReal}
               />
 
-              {/* Real Face (Clipped Layer - Left Side) */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  bottom: 0,
-                  width: `${sliderPos}%`,
-                  overflow: "hidden",
-                }}
-              >
-                <div style={{ position: "relative", width: visualRef.current?.offsetWidth || 520, height: "100%" }}>
-                  <Image
-                    src="/assets/portrait_real.jpg"
-                    alt="Face portrait original"
-                    fill
-                    priority
-                    className={styles.imageLayerReal}
-                  />
-                </div>
-              </div>
+              {/* Digital artifact pixelation overlay on the fake area */}
+              <div className={styles.glitchGridOverlay} />
 
-              {/* Draggable Laser Divider */}
+              {/* Draggable & Auto-sweeping Laser Divider */}
               <div
                 className={styles.laserDivider}
-                style={{ left: `${sliderPos}%` }}
-                onMouseDown={() => setIsDragging(true)}
-                onTouchStart={() => setIsDragging(true)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                  if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+                }}
+                onTouchStart={() => {
+                  setIsDragging(true);
+                  if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+                }}
               >
-                <div className={styles.laserHandle}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <div
+                  className={`${styles.laserHandle} ${isDragging ? styles.laserHandleActive : ""}`}
+                  title="Drag to compare Real vs Fake"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <polyline points="15 18 9 12 15 6"></polyline>
                     <polyline points="9 18 15 12 9 6"></polyline>
                   </svg>
                 </div>
+              </div>
+
+              {/* Auto-Scanner Status Pill Badge */}
+              <div
+                className={styles.scannerStatusBadge}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsAutoScanning((prev) => !prev);
+                  if (!isAutoScanning) {
+                    lastTimeRef.current = null;
+                  }
+                }}
+                title="Click to toggle auto scanner"
+              >
+                <span className={`${styles.scannerDot} ${!isAutoScanning ? styles.scannerDotPaused : ""}`} />
+                <span>{isAutoScanning ? "Live Scanner • Sweeping" : "Scanner • Paused (Click to sweep)"}</span>
               </div>
 
               {/* Bottom 30-Frame Filmstrip */}
