@@ -1,67 +1,165 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./page.module.css";
 
+const API_BASE = "http://127.0.0.1:5000";
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB, matches Flask backend limit
+const ALLOWED_EXTENSIONS = [".mp4", ".avi", ".mov", ".mkv", ".webm"];
+
 export default function DetectStudio() {
-  const [activePreset, setActivePreset] = useState("faceswap");
+  // Backend health status: "checking" | "online" | "offline" | "not_ready"
+  const [backendHealth, setBackendHealth] = useState("checking");
+  const [backendInfo, setBackendInfo] = useState(null);
+
+  // Video file & preview state
   const [uploadedFile, setUploadedFile] = useState(null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState(null);
+  const [activePreset, setActivePreset] = useState(null);
+  const [activePresetObj, setActivePresetObj] = useState(null);
+  const [playerViewMode, setPlayerViewMode] = useState("video"); // "video" | "crop"
+
+  // Inference execution state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [activeStepText, setActiveStepText] = useState("");
   const [analysisResult, setAnalysisResult] = useState(null);
-  const [activeFrameIndex, setActiveFrameIndex] = useState(8);
+  const [activeFrameIndex, setActiveFrameIndex] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const fileInputRef = useRef(null);
+  const videoElementRef = useRef(null);
 
-  // Preset options
-  const presets = [
+  // 30 video frames array
+  const filmFrames = Array.from({ length: 30 }, (_, i) => i);
+
+  // Verified benchmark demo samples with real video files in /samples/
+  const demoSamples = [
     {
-      id: "faceswap",
-      name: "DeepFake Detection (FaceSwap)",
-      type: "FAKE",
-      thumb: "/assets/sample_man.jpg",
-      details: "FaceForensics++ FaceSwap video crop (ID #042)",
+      id: "real_interview",
+      name: "Authentic Face Sequence",
+      filename: "sample_real_face.mp4",
+      url: "/samples/sample_real_face.mp4",
+      groundTruth: "REAL",
+      badgeColor: styles.sampleTagGreen,
+      details: "30-frame genuine actor video (30 FPS • 1024x1024)",
     },
     {
-      id: "real",
-      name: "Original Authentic Sequence",
-      type: "REAL",
-      thumb: "/assets/portrait_real.jpg",
-      details: "FaceForensics++ Pristine actor sequence (ID #108)",
+      id: "deepfake_swap",
+      name: "Manipulated Deepfake Sequence",
+      filename: "sample_deepfake_face.mp4",
+      url: "/samples/sample_deepfake_face.mp4",
+      groundTruth: "FAKE",
+      badgeColor: styles.sampleTagRed,
+      details: "30-frame video with high-frequency boundary artifacts",
     },
     {
-      id: "neuraltextures",
-      name: "NeuralTextures Facial Synthesis",
-      type: "FAKE",
-      thumb: "/assets/portrait_fake.jpg",
-      details: "NeuralTextures mouth & texture re-rendering (ID #729)",
+      id: "no_face_validation",
+      name: "No-Face Edge Case",
+      filename: "sample_no_face.mp4",
+      url: "/samples/sample_no_face.mp4",
+      groundTruth: "NO FACE",
+      badgeColor: styles.sampleTagRed,
+      details: "30-frame validation video with zero human faces",
     },
   ];
 
-  // 30 video frames list
-  const filmFrames = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
-  ];
+  // Check Flask backend health on mount
+  const checkHealth = useCallback(async () => {
+    setBackendHealth("checking");
+    try {
+      const res = await fetch(`${API_BASE}/health`, { method: "GET" });
+      if (!res.ok) {
+        setBackendHealth("offline");
+        return;
+      }
+      const data = await res.json();
+      if (data.model_ready) {
+        setBackendHealth("online");
+        setBackendInfo(data);
+      } else {
+        setBackendHealth("not_ready");
+      }
+    } catch {
+      setBackendHealth("offline");
+    }
+  }, []);
 
-  // Handle File Upload
+  useEffect(() => {
+    checkHealth();
+  }, [checkHealth]);
+
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (videoPreviewUrl) {
+        URL.revokeObjectURL(videoPreviewUrl);
+      }
+    };
+  }, [videoPreviewUrl]);
+
+  // File validation
+  const validateFile = (file) => {
+    if (!file) return "No file selected.";
+    const ext = "." + file.name.split(".").pop().toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return `Unsupported format '${ext}'. SAGE accepts MP4, AVI, MOV, MKV, or WebM.`;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      return `File size (${sizeMB} MB) exceeds the 100 MB limit.`;
+    }
+    return null;
+  };
+
+  // Handle uploaded video file
   const handleFileUpload = (file) => {
     if (!file) return;
+
+    const validationError = validateFile(file);
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+    }
+
     setUploadedFile(file);
     setActivePreset(null);
+    setActivePresetObj(null);
     setAnalysisResult(null);
     setErrorMessage("");
+    setActiveFrameIndex(0);
+    setPlayerViewMode("video");
 
     const objectUrl = URL.createObjectURL(file);
     setVideoPreviewUrl(objectUrl);
   };
 
+  // Remove/clear currently selected video
+  const removeSelectedVideo = () => {
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+    }
+    setUploadedFile(null);
+    setVideoPreviewUrl(null);
+    setActivePreset(null);
+    setActivePresetObj(null);
+    setAnalysisResult(null);
+    setErrorMessage("");
+    setActiveFrameIndex(0);
+    setPlayerViewMode("video");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // Drag-and-drop event handlers
   const onDrop = (e) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -70,140 +168,149 @@ export default function DetectStudio() {
     }
   };
 
-  // Run SAGE Inference (Backend API for uploaded files, benchmark simulation for presets)
-  const runAnalysis = async () => {
-    setIsAnalyzing(true);
-    setAnalysisProgress(10);
-    setActiveStepText("Step 1/4: Initializing SAGE forensic pipeline...");
+  // Select a verified demo sample video and load its genuine file
+  const selectDemoSample = async (sample) => {
+    if (isAnalyzing) return;
+
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+    }
+
+    setActivePreset(sample.id);
+    setActivePresetObj(sample);
     setAnalysisResult(null);
     setErrorMessage("");
+    setActiveFrameIndex(0);
+    setPlayerViewMode("video");
 
-    // Real video uploaded -> call Python Flask backend
-    if (uploadedFile) {
-      try {
-        const formData = new FormData();
-        formData.append("video", uploadedFile);
-
-        setActiveStepText("Step 2/4: MTCNN 30-Frame Face Extraction & 224x224 Alignment...");
-        setAnalysisProgress(35);
-
-        const startTime = performance.now();
-        const response = await fetch("http://127.0.0.1:5000/detect", {
-          method: "POST",
-          body: formData,
-        });
-
-        setActiveStepText("Step 3/4: Dual-Branch Inference & Gated α-Fusion...");
-        setAnalysisProgress(80);
-
-        const data = await response.json();
-        const latencyMs = Math.round(performance.now() - startTime);
-
-        if (!response.ok) {
-          throw new Error(data.error || `Server returned error (${response.status})`);
-        }
-
-        setAnalysisProgress(100);
-        setIsAnalyzing(false);
-
-        const isFake = data.prediction === "FAKE";
-        setAnalysisResult({
-          label: data.prediction,
-          confidence: data.confidence,
-          latency: `${latencyMs} ms`,
-          semanticScore: isFake
-            ? (1.0 - data.authentic_probability).toFixed(2)
-            : data.authentic_probability.toFixed(2),
-          forensicNoise: isFake
-            ? `High (${data.fake_probability.toFixed(2)})`
-            : `Low (${data.fake_probability.toFixed(2)})`,
-          temporalStability: isFake ? "62.4%" : "99.2%",
-          gateAlpha:
-            data.disagreement_alpha !== undefined
-              ? data.disagreement_alpha.toFixed(2)
-              : "0.50",
-          details: isFake
-            ? `Bayar learnable constrained convolution flagged high-frequency forensic noise. Gated fusion classified video as MANIPULATED with ${data.confidence} confidence.`
-            : `Dual-branch neural analysis verified spatial-temporal authenticity across 30 sequential frames with ${data.confidence} confidence.`,
-          flaggedFrames: isFake ? [12, 14, 16, 18, 20, 22] : [],
-        });
-      } catch (err) {
-        setIsAnalyzing(false);
-        setErrorMessage(
-          err.message || "Failed to connect to backend forensic API. Ensure Flask server is running on port 5000."
-        );
+    try {
+      const res = await fetch(sample.url);
+      if (!res.ok) {
+        throw new Error(`Could not load sample video file (${res.status})`);
       }
+      const blob = await res.blob();
+      const file = new File([blob], sample.filename, { type: "video/mp4" });
+      setUploadedFile(file);
+      const objectUrl = URL.createObjectURL(blob);
+      setVideoPreviewUrl(objectUrl);
+    } catch (err) {
+      setErrorMessage(`Failed to load demo video: ${err.message}`);
+    }
+  };
+
+  // Run SAGE Inference through Python Flask backend
+  const runAnalysis = async () => {
+    if (!uploadedFile) {
+      setErrorMessage("Please select or upload a video first.");
       return;
     }
 
-    // Benchmark preset simulation for demo cards
-    const interval = setInterval(() => {
-      setAnalysisProgress((prev) => {
-        if (prev === 25) {
-          setActiveStepText("Step 2/4: DINOv2-small Semantic Vision & 3D Conv Temporal Motion...");
-        } else if (prev === 55) {
-          setActiveStepText("Step 3/4: Bayar Constrained Conv High-Frequency Residual Filtering...");
-        } else if (prev === 85) {
-          setActiveStepText("Step 4/4: Disagreement Gate & Blending Logit Computation...");
-        }
+    if (backendHealth === "offline") {
+      setErrorMessage(
+        "SAGE backend is offline. Please ensure the Flask server is running on port 5000."
+      );
+      return;
+    }
 
-        if (prev >= 95) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsAnalyzing(false);
-            if (activePreset === "real") {
-              setAnalysisResult({
-                label: "REAL",
-                confidence: "99.1%",
-                latency: "142.8 ms",
-                semanticScore: "0.98",
-                forensicNoise: "Low (0.04)",
-                temporalStability: "99.4%",
-                gateAlpha: "0.82",
-                details: "No spatial tampering or high-frequency pixel boundary anomalies detected across the 30-frame sequence. Temporal motion aligns with natural human physiology.",
-                flaggedFrames: [],
-              });
-            } else {
-              setAnalysisResult({
-                label: "FAKE",
-                confidence: "98.3%",
-                latency: "146.2 ms",
-                semanticScore: "0.41",
-                forensicNoise: "High (0.89)",
-                temporalStability: "62.1%",
-                gateAlpha: "0.29",
-                details: "Bayar high-pass convolution detected boundary blending seams and upsampling noise patterns. DINOv2 3D temporal conv flagged facial flickering across frames 12-24.",
-                flaggedFrames: [12, 14, 16, 18, 20, 22],
-              });
-            }
-          }, 400);
-          return 100;
+    setIsAnalyzing(true);
+    setAnalysisProgress(12);
+    setActiveStepText("Step 1/4: Transferring video to SAGE forensic engine...");
+    setAnalysisResult(null);
+    setErrorMessage("");
+
+    // Step progress simulation while waiting for real HTTP response
+    const progressInterval = setInterval(() => {
+      setAnalysisProgress((prev) => {
+        if (prev < 35) {
+          setActiveStepText("Step 2/4: MTCNN 30-Frame Face Extraction & 224x224 Alignment...");
+          return prev + 8;
+        } else if (prev < 75) {
+          setActiveStepText("Step 3/4: Dual-Branch Forward Pass (DINOv2 Semantics + Bayar Conv)...");
+          return prev + 6;
+        } else if (prev < 92) {
+          setActiveStepText("Step 4/4: Disagreement α-Fusion & Final Blending Logit Computation...");
+          return prev + 2;
         }
-        return prev + 15;
+        return prev;
       });
-    }, 130);
+    }, 450);
+
+    try {
+      const formData = new FormData();
+      formData.append("video", uploadedFile);
+
+      const response = await fetch(`${API_BASE}/detect`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      clearInterval(progressInterval);
+
+      if (!response.ok) {
+        throw new Error(data.error || `Server returned error (${response.status})`);
+      }
+
+      setAnalysisProgress(100);
+      setIsAnalyzing(false);
+
+      setAnalysisResult({
+        prediction: data.prediction,
+        fake_probability: data.fake_probability,
+        authentic_probability: data.authentic_probability,
+        confidence: data.confidence,
+        logit: data.logit,
+        disagreement_alpha: data.disagreement_alpha,
+        frames_analyzed: data.frames_analyzed || 30,
+        device: data.device || "cpu",
+        timing: data.timing || null,
+        metadata: data.metadata || null,
+        frame_thumbnails: data.frame_thumbnails || [],
+        face_detections: data.face_detections || [],
+        groundTruth: activePresetObj ? activePresetObj.groundTruth : null,
+      });
+
+      // If cropped face thumbnails were returned, switch to crop view so user sees extracted faces
+      if (data.frame_thumbnails && data.frame_thumbnails.length > 0) {
+        setPlayerViewMode("crop");
+      }
+    } catch (err) {
+      clearInterval(progressInterval);
+      setIsAnalyzing(false);
+      setErrorMessage(
+        err.message ||
+          "Failed to connect to backend forensic API. Ensure Flask server is running on port 5000."
+      );
+    }
   };
 
-  // Download Report
+  // Download Forensic JSON Report
   const downloadReport = () => {
     if (!analysisResult) return;
     const reportData = {
-      model: "SAGE Dual-Branch Deepfake Detector",
-      backbone: "facebook/dinov2-small + BayarConv2d",
+      project: "SAGE Deepfake Video Detection",
+      architecture: "B4BayarGatedDetector (DINOv2-small + BayarConv2d)",
       timestamp: new Date().toISOString(),
-      prediction: analysisResult.label,
-      confidence: analysisResult.confidence,
-      inferenceLatency: analysisResult.latency,
-      telemetry: {
-        semanticScore: analysisResult.semanticScore,
-        forensicArtifactNoise: analysisResult.forensicNoise,
-        temporalStability: analysisResult.temporalStability,
-        disagreementGateAlpha: analysisResult.gateAlpha,
+      filename: uploadedFile?.name || "unknown",
+      fileSizeBytes: uploadedFile?.size || 0,
+      groundTruth: analysisResult.groundTruth || "NOT_SPECIFIED",
+      modelOutput: {
+        prediction: analysisResult.prediction,
+        confidence: analysisResult.confidence,
+        fakeProbability: analysisResult.fake_probability,
+        authenticProbability: analysisResult.authentic_probability,
+        rawLogit: analysisResult.logit,
+        disagreementGateAlpha: analysisResult.disagreement_alpha,
+        framesAnalyzed: analysisResult.frames_analyzed,
+        device: analysisResult.device,
       },
-      evaluationDataset: "FaceForensics++ (30 frames)",
+      measuredTimingMs: analysisResult.timing || {},
+      videoMetadata: analysisResult.metadata || {},
     };
 
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -212,13 +319,13 @@ export default function DetectStudio() {
     URL.revokeObjectURL(url);
   };
 
-  // Active display image
-  const getCurrentDisplayImage = () => {
-    if (activePreset === "faceswap") return "/assets/sample_man.jpg";
-    if (activePreset === "real") return "/assets/portrait_real.jpg";
-    if (activePreset === "neuraltextures") return "/assets/portrait_fake.jpg";
-    return "/assets/portrait_split.jpg";
-  };
+  // Active face detection for current frame
+  const currentFrameDetection =
+    analysisResult?.face_detections?.[activeFrameIndex] || null;
+
+  // Active thumbnail for current frame
+  const currentFrameThumbnail =
+    analysisResult?.frame_thumbnails?.[activeFrameIndex] || null;
 
   return (
     <div className={styles.container}>
@@ -247,7 +354,14 @@ export default function DetectStudio() {
                   strokeLinecap="round"
                 />
                 <defs>
-                  <linearGradient id="detectShieldGrad" x1="3" y1="2" x2="21" y2="23" gradientUnits="userSpaceOnUse">
+                  <linearGradient
+                    id="detectShieldGrad"
+                    x1="3"
+                    y1="2"
+                    x2="21"
+                    y2="23"
+                    gradientUnits="userSpaceOnUse"
+                  >
                     <stop stopColor="#3b82f6" />
                     <stop offset="1" stopColor="#8b5cf6" />
                   </linearGradient>
@@ -268,10 +382,38 @@ export default function DetectStudio() {
           </nav>
 
           <div className={styles.headerRight}>
-            <div className={styles.modelBadge}>
-              <span className={styles.modelBadgeDot} />
-              <span>SAGE v1.0 • Ready</span>
-            </div>
+            {/* Dynamic System Health Badge */}
+            {backendHealth === "checking" && (
+              <div className={`${styles.modelBadge} ${styles.modelBadgeChecking}`}>
+                <span className={`${styles.modelBadgeDot} ${styles.modelBadgeDotChecking}`} />
+                <span>Connecting to SAGE Core...</span>
+              </div>
+            )}
+            {backendHealth === "online" && (
+              <div className={styles.modelBadge}>
+                <span className={styles.modelBadgeDot} />
+                <span>
+                  SAGE Core: Online ({backendInfo?.device ? backendInfo.device.toUpperCase() : "CPU"})
+                </span>
+              </div>
+            )}
+            {backendHealth === "offline" && (
+              <div
+                className={`${styles.modelBadge} ${styles.modelBadgeOffline}`}
+                onClick={checkHealth}
+                style={{ cursor: "pointer" }}
+                title="Click to re-check backend connection"
+              >
+                <span className={`${styles.modelBadgeDot} ${styles.modelBadgeDotOffline}`} />
+                <span>SAGE Core: Offline (Retry)</span>
+              </div>
+            )}
+            {backendHealth === "not_ready" && (
+              <div className={`${styles.modelBadge} ${styles.modelBadgeWarning}`}>
+                <span className={`${styles.modelBadgeDot} ${styles.modelBadgeDotWarning}`} />
+                <span>SAGE Core: Model Initializing...</span>
+              </div>
+            )}
 
             <Link href="/" className={styles.backHomeBtn}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -298,7 +440,7 @@ export default function DetectStudio() {
             Upload Video for <span className="gradient-text-hero">Deepfake Detection</span>
           </h1>
           <p className={styles.studioSubtitle}>
-            Submit any face video to run SAGE&apos;s dual-branch neural architecture. Examines 30 sequential frames for temporal motion inconsistencies and high-frequency forensic noise in ~146ms.
+            Submit any face video to run SAGE&apos;s dual-branch neural architecture. Examines 30 sequential frames with MTCNN face alignment, DINOv2 semantics, and 5x5 Bayar constrained convolution.
           </p>
         </div>
 
@@ -337,20 +479,18 @@ export default function DetectStudio() {
                 </div>
                 <div>
                   <p className={styles.dropzoneTitle}>
-                    {uploadedFile ? uploadedFile.name : "Drag & drop video here, or browse files"}
+                    {uploadedFile ? "Replace or Choose Another Video" : "Drag & drop video here, or browse files"}
                   </p>
                   <p className={styles.dropzoneSubtitle}>
-                    {uploadedFile
-                      ? `${(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for analysis`
-                      : "Automatic 30-frame MTCNN face extraction will be performed"}
+                    Automatic 30-frame MTCNN face extraction will be performed
                   </p>
-                  <p className={styles.dropzoneFormats}>MP4, MOV, WebM, AVI (up to 50MB)</p>
+                  <p className={styles.dropzoneFormats}>MP4, MOV, WebM, AVI, MKV (up to 100MB)</p>
                 </div>
                 <input
                   type="file"
                   ref={fileInputRef}
                   className={styles.hiddenFileInput}
-                  accept="video/*,image/*"
+                  accept="video/mp4,video/avi,video/quicktime,video/x-matroska,video/webm"
                   onChange={(e) => {
                     if (e.target.files && e.target.files[0]) {
                       handleFileUpload(e.target.files[0]);
@@ -359,37 +499,71 @@ export default function DetectStudio() {
                 />
               </div>
 
-              {/* Sample Quick Picker */}
+              {/* Selected File Details Bar with Clear Option */}
+              {uploadedFile && (
+                <div className={styles.fileMetaRow}>
+                  <div className={styles.fileMetaInfo}>
+                    <span className={styles.fileMetaName} title={uploadedFile.name}>
+                      {uploadedFile.name}
+                    </span>
+                    <span className={styles.fileMetaSub}>
+                      {(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for SAGE analysis
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.btnRemoveFile}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeSelectedVideo();
+                    }}
+                    title="Remove and reset selected video"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    <span>Remove</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Demo Benchmark Samples Section */}
               <div className={styles.samplesSection}>
-                <span className={styles.samplesLabel}>Or try verified benchmark samples:</span>
+                <span className={styles.samplesLabel}>Or test with verified demo benchmark videos:</span>
                 <div className={styles.sampleButtonsGrid}>
-                  {presets.map((preset) => (
+                  {demoSamples.map((sample) => (
                     <div
-                      key={preset.id}
-                      className={`${styles.sampleCardBtn} ${activePreset === preset.id ? styles.sampleCardBtnSelected : ""}`}
-                      onClick={() => {
-                        setActivePreset(preset.id);
-                        setUploadedFile(null);
-                        setVideoPreviewUrl(null);
-                        setAnalysisResult(null);
-                        setErrorMessage("");
-                      }}
+                      key={sample.id}
+                      className={`${styles.sampleCardBtn} ${
+                        activePreset === sample.id ? styles.sampleCardBtnSelected : ""
+                      }`}
+                      onClick={() => selectDemoSample(sample)}
                     >
                       <div className={styles.sampleInfoLeft}>
-                        <Image
-                          src={preset.thumb}
-                          alt={preset.name}
-                          width={40}
-                          height={40}
-                          className={styles.sampleThumb}
-                        />
+                        <div
+                          style={{
+                            width: "36px",
+                            height: "36px",
+                            borderRadius: "8px",
+                            background: "rgba(255, 255, 255, 0.05)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "1px solid rgba(255, 255, 255, 0.12)",
+                          }}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2">
+                            <polygon points="5 3 19 12 5 21 5 3" fill="rgba(56, 189, 248, 0.3)"></polygon>
+                          </svg>
+                        </div>
                         <div>
-                          <div className={styles.sampleName}>{preset.name}</div>
-                          <div className={styles.sampleTypeTag}>{preset.details}</div>
+                          <div className={styles.sampleName}>{sample.name}</div>
+                          <div className={styles.sampleTypeTag}>{sample.details}</div>
                         </div>
                       </div>
-                      <span className={preset.type === "FAKE" ? styles.sampleTagRed : styles.sampleTagGreen}>
-                        {preset.type}
+                      <span className={sample.badgeColor}>
+                        GT: {sample.groundTruth}
                       </span>
                     </div>
                   ))}
@@ -405,9 +579,9 @@ export default function DetectStudio() {
                     <circle cx="12" cy="12" r="3"></circle>
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                   </svg>
-                  Inference Configuration
+                  Pipeline Configuration
                 </span>
-                <span className={styles.panelBadge}>Auto</span>
+                <span className={styles.panelBadge}>Trained Weights</span>
               </div>
 
               <div className={styles.paramsGrid}>
@@ -424,15 +598,15 @@ export default function DetectStudio() {
                   <span className={styles.paramValue}>5x5 Learnable Bayar</span>
                 </div>
                 <div className={styles.paramBox}>
-                  <span className={styles.paramLabel}>Decision Gate</span>
-                  <span className={styles.paramValue}>Disagreement α-Fusion</span>
+                  <span className={styles.paramLabel}>Fusion Mechanism</span>
+                  <span className={styles.paramValue}>Disagreement α-Gate</span>
                 </div>
               </div>
 
               {/* Start Scan Button */}
               <button
                 className={styles.btnRunScan}
-                disabled={isAnalyzing}
+                disabled={isAnalyzing || !uploadedFile || backendHealth === "offline"}
                 onClick={runAnalysis}
               >
                 {isAnalyzing ? (
@@ -441,7 +615,7 @@ export default function DetectStudio() {
                       <circle cx="12" cy="12" r="10" strokeOpacity="0.25"></circle>
                       <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"></path>
                     </svg>
-                    <span>Running Dual-Branch SAGE Scan...</span>
+                    <span>Running Real SAGE Neural Inference...</span>
                   </>
                 ) : (
                   <>
@@ -474,8 +648,38 @@ export default function DetectStudio() {
 
             {/* Player / Preview Card */}
             <div className={styles.playerCard}>
-              {videoPreviewUrl ? (
+              {/* View mode toggle (if extracted thumbnails are available) */}
+              {analysisResult?.frame_thumbnails && analysisResult.frame_thumbnails.length > 0 && (
+                <div className={styles.viewModeToggleRow}>
+                  <button
+                    type="button"
+                    className={`${styles.viewModeBtn} ${playerViewMode === "video" ? styles.viewModeBtnActive : ""}`}
+                    onClick={() => setPlayerViewMode("video")}
+                  >
+                    Raw Video
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.viewModeBtn} ${playerViewMode === "crop" ? styles.viewModeBtnActive : ""}`}
+                    onClick={() => setPlayerViewMode("crop")}
+                  >
+                    SAGE Face Crop #{activeFrameIndex}
+                  </button>
+                </div>
+              )}
+
+              {/* Video Element or Extracted Crop Display */}
+              {playerViewMode === "crop" && currentFrameThumbnail ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={currentFrameThumbnail}
+                  alt={`Cropped face for frame ${activeFrameIndex}`}
+                  className={styles.playerMedia}
+                  style={{ objectFit: "contain", background: "#0a0f22" }}
+                />
+              ) : videoPreviewUrl ? (
                 <video
+                  ref={videoElementRef}
                   src={videoPreviewUrl}
                   controls
                   className={styles.playerMedia}
@@ -484,43 +688,91 @@ export default function DetectStudio() {
                   muted
                 />
               ) : (
-                <Image
-                  src={getCurrentDisplayImage()}
-                  alt="Video sequence preview"
-                  fill
-                  priority
-                  className={styles.playerMedia}
-                />
+                <div className={styles.emptyPlayerState}>
+                  <div className={styles.emptyPlayerIcon}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+                      <line x1="7" y1="2" x2="7" y2="22"></line>
+                      <line x1="17" y1="2" x2="17" y2="22"></line>
+                      <line x1="2" y1="12" x2="22" y2="12"></line>
+                      <line x1="2" y1="7" x2="7" y2="7"></line>
+                      <line x1="2" y1="17" x2="7" y2="17"></line>
+                      <line x1="17" y1="17" x2="22" y2="17"></line>
+                      <line x1="17" y1="7" x2="22" y2="7"></line>
+                    </svg>
+                  </div>
+                  <div>
+                    <strong style={{ color: "#ffffff", display: "block", marginBottom: "4px" }}>
+                      No Video Loaded
+                    </strong>
+                    <span>Upload a face video or choose a benchmark demo sample to begin</span>
+                  </div>
+                </div>
               )}
 
-              {/* HUD Overlay */}
+              {/* HUD Overlay on Video Player */}
               <div className={styles.playerHudOverlay}>
                 <div className={styles.hudTopBar}>
-                  <div className={`${styles.hudChip} ${styles.hudChipLive}`}>
-                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#f43f5e" }} />
-                    <span>REC • MTCNN TRACK</span>
+                  <div className={`${styles.hudChip} ${isAnalyzing ? styles.hudChipLive : ""}`}>
+                    <span
+                      style={{
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        background: isAnalyzing ? "#f43f5e" : "#38bdf8",
+                      }}
+                    />
+                    <span>
+                      {isAnalyzing
+                        ? "ANALYZING • SAGE ACTIVE"
+                        : analysisResult
+                        ? "INSPECTION COMPLETE"
+                        : "IDLE • AWAITING VIDEO"}
+                    </span>
                   </div>
+
                   <div className={styles.hudChip}>
-                    <span>FPS: 30 • 224x224 RGB</span>
+                    <span>
+                      {analysisResult?.metadata
+                        ? `${analysisResult.metadata.video_fps} FPS • ${analysisResult.metadata.video_resolution} RGB`
+                        : "30 FRAMES • 224x224 RGB"}
+                    </span>
                   </div>
                 </div>
 
-                {/* Face Tracker Bounding Box */}
-                <div className={styles.faceBoundingBox}>
-                  <div className={styles.boxLabel}>FACE 01 (CONF: 0.99)</div>
-                  <div className={styles.boxCorners}>
-                    <div style={{ width: "8px", height: "8px", borderBottom: "2px solid #38bdf8", borderLeft: "2px solid #38bdf8" }} />
-                    <div className={styles.boxCornerCross} />
+                {/* Face Tracker Bounding Box - Shown truthfully only when face detection is available */}
+                {analysisResult && (
+                  <div className={styles.faceBoundingBox}>
+                    <div className={styles.boxLabel}>
+                      {currentFrameDetection?.detected && currentFrameDetection.confidence !== null
+                        ? `FACE DETECTED (CONF: ${(currentFrameDetection.confidence * 100).toFixed(1)}%)`
+                        : "FACE TRACKING (INTERPOLATED)"}
+                    </div>
+                    <div className={styles.boxCorners}>
+                      <div
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderBottom: "2px solid #38bdf8",
+                          borderLeft: "2px solid #38bdf8",
+                        }}
+                      />
+                      <div className={styles.boxCornerCross} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Active Laser Scanner Line */}
                 {isAnalyzing && <div className={styles.laserScannerLine} />}
 
-                {/* Bottom HUD */}
+                {/* Bottom HUD Bar */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span className={styles.hudChip}>FRAME: {activeFrameIndex} / 29</span>
-                  <span className={styles.hudChip}>SAGE CORE: ONLINE</span>
+                  <span className={styles.hudChip}>
+                    FRAME: {activeFrameIndex} / 29 (TOTAL: 30)
+                  </span>
+                  <span className={styles.hudChip}>
+                    SAGE CORE: {backendHealth.toUpperCase()}
+                  </span>
                 </div>
               </div>
             </div>
@@ -528,22 +780,39 @@ export default function DetectStudio() {
             {/* 30-Frame Filmstrip Timeline Scrubber */}
             <div className={styles.timelineScrubber}>
               <div className={styles.timelineHeader}>
-                <span>30-Frame Sequence Timeline (MTCNN Alignments)</span>
-                <span>Frame #{activeFrameIndex}</span>
+                <span>
+                  {analysisResult?.frame_thumbnails?.length === 30
+                    ? "30-Frame MTCNN Facial Alignments (Extracted from Video)"
+                    : "30-Frame Sequence Timeline (Extracted by SAGE Pipeline on Analysis)"}
+                </span>
+                <span>Frame #{activeFrameIndex} of 30</span>
               </div>
+
               <div className={styles.framesTrack}>
                 {filmFrames.map((frameNum) => {
-                  const isFlagged = analysisResult?.flaggedFrames?.includes(frameNum);
-                  return (
-                    <Image
+                  const thumb = analysisResult?.frame_thumbnails?.[frameNum];
+                  return thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
                       key={frameNum}
-                      src={getCurrentDisplayImage()}
+                      src={thumb}
                       alt={`Frame ${frameNum}`}
-                      width={44}
-                      height={38}
-                      className={`${styles.frameThumbnailBox} ${activeFrameIndex === frameNum ? styles.frameThumbnailActive : ""} ${isFlagged ? styles.frameThumbnailFlagged : ""}`}
+                      className={`${styles.frameThumbnailBox} ${
+                        activeFrameIndex === frameNum ? styles.frameThumbnailActive : ""
+                      }`}
                       onClick={() => setActiveFrameIndex(frameNum)}
                     />
+                  ) : (
+                    <div
+                      key={frameNum}
+                      className={`${styles.frameThumbnailPlaceholder} ${
+                        activeFrameIndex === frameNum ? styles.frameThumbnailPlaceholderActive : ""
+                      }`}
+                      onClick={() => setActiveFrameIndex(frameNum)}
+                      title={`Frame #${frameNum} - Populated after SAGE analysis`}
+                    >
+                      #{frameNum}
+                    </div>
                   );
                 })}
               </div>
@@ -554,10 +823,15 @@ export default function DetectStudio() {
               <div className={styles.pipelineStepper}>
                 <div className={styles.pipelineHeader}>
                   <span>{activeStepText}</span>
-                  <span style={{ fontFamily: "var(--font-mono)", color: "#38bdf8" }}>{analysisProgress}%</span>
+                  <span style={{ fontFamily: "var(--font-mono)", color: "#38bdf8" }}>
+                    {analysisProgress}%
+                  </span>
                 </div>
                 <div className={styles.pipelineProgressTrack}>
-                  <div className={styles.pipelineProgressFill} style={{ width: `${analysisProgress}%` }} />
+                  <div
+                    className={styles.pipelineProgressFill}
+                    style={{ width: `${analysisProgress}%` }}
+                  />
                 </div>
                 <div className={styles.pipelineStepsList}>
                   <span>MTCNN Alignment</span>
@@ -568,47 +842,115 @@ export default function DetectStudio() {
               </div>
             )}
 
-            {/* Final Verdict Card (After Analysis) */}
+            {/* Final Verdict Card (After Real Backend Analysis) */}
             {analysisResult && (
-              <div className={`${styles.verdictCard} ${analysisResult.label === "FAKE" ? styles.verdictFake : styles.verdictReal}`}>
+              <div
+                className={`${styles.verdictCard} ${
+                  analysisResult.prediction === "FAKE"
+                    ? styles.verdictFake
+                    : styles.verdictReal
+                }`}
+              >
                 <div className={styles.verdictTopRow}>
-                  <div className={analysisResult.label === "FAKE" ? styles.verdictBadgeFake : styles.verdictBadgeReal}>
-                    <span>{analysisResult.label === "FAKE" ? "⚠️ MANIPULATED / FAKE" : "✓ AUTHENTIC / REAL"}</span>
+                  <div
+                    className={
+                      analysisResult.prediction === "FAKE"
+                        ? styles.verdictBadgeFake
+                        : styles.verdictBadgeReal
+                    }
+                  >
+                    <span>
+                      {analysisResult.prediction === "FAKE"
+                        ? "⚠️ MANIPULATED / FAKE"
+                        : "✓ AUTHENTIC / REAL"}
+                    </span>
                     <span>({analysisResult.confidence})</span>
                   </div>
+
                   <div className={styles.verdictLatencyChip}>
-                    Latency: <strong style={{ color: "#ffffff" }}>{analysisResult.latency}</strong> (~6.84 FPS)
+                    Server Latency:{" "}
+                    <strong style={{ color: "#ffffff" }}>
+                      {analysisResult.timing ? `${analysisResult.timing.total_ms} ms` : "Completed"}
+                    </strong>
                   </div>
                 </div>
 
+                {/* Ground Truth Validation Comparison (if running a benchmark demo sample) */}
+                {analysisResult.groundTruth && (
+                  <div className={styles.verdictGtRow}>
+                    <span>Known Benchmark Ground Truth:</span>
+                    <strong>{analysisResult.groundTruth}</strong>
+                    <span>•</span>
+                    <span>Evaluation:</span>
+                    <span
+                      className={
+                        analysisResult.prediction === analysisResult.groundTruth
+                          ? styles.gtBadgeMatch
+                          : styles.gtBadgeMismatch
+                      }
+                    >
+                      {analysisResult.prediction === analysisResult.groundTruth
+                        ? "✓ Model Prediction Matches Ground Truth"
+                        : "⚠️ Prediction Differs from Ground Truth"}
+                    </span>
+                  </div>
+                )}
+
+                {/* Scientific Description */}
                 <p className={styles.verdictDescription}>
-                  {analysisResult.details}
+                  {analysisResult.prediction === "FAKE"
+                    ? `Bayar 5x5 constrained convolution and DINOv2 temporal attention identified high-frequency spatial noise and boundary artifacts across the 30-frame sequence. Disagreement gate blended decision into MANIPULATED with ${analysisResult.confidence} confidence (raw logit: ${analysisResult.logit > 0 ? "+" : ""}${analysisResult.logit.toFixed(4)}).`
+                    : `Dual-branch neural analysis confirmed spatial-temporal consistency across all 30 extracted facial frames. Gated fusion classified video as AUTHENTIC with ${analysisResult.confidence} confidence (raw logit: ${analysisResult.logit.toFixed(4)}).`}
                 </p>
 
-                {/* Telemetry Matrix */}
+                {/* Real Measured Timing Breakdown */}
+                {analysisResult.timing && (
+                  <div className={styles.timingBreakdownBox}>
+                    <div className={styles.timingRow}>
+                      <span className={styles.timingLabel}>MTCNN Face Preprocessing (30 Frames):</span>
+                      <span className={styles.timingVal}>{analysisResult.timing.preprocessing_ms} ms</span>
+                    </div>
+                    <div className={styles.timingRow}>
+                      <span className={styles.timingLabel}>SAGE Dual-Branch Model Inference:</span>
+                      <span className={styles.timingVal}>
+                        {analysisResult.timing.inference_ms} ms (
+                        {(30 / (analysisResult.timing.inference_ms / 1000)).toFixed(1)} FPS on {analysisResult.device.toUpperCase()})
+                      </span>
+                    </div>
+                    <div className={styles.timingRow}>
+                      <span className={styles.timingLabel}>Total Server Request Processing Time:</span>
+                      <span className={styles.timingVal}>{analysisResult.timing.total_ms} ms</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Truthful Model Telemetry Matrix */}
                 <div className={styles.telemetryGrid}>
                   <div className={styles.telemetryItem}>
-                    <span className={styles.telemetryLabel}>Semantic Inconsistency</span>
-                    <span className={styles.telemetryValue} style={{ color: "#38bdf8" }}>
-                      {analysisResult.semanticScore}
-                    </span>
-                  </div>
-                  <div className={styles.telemetryItem}>
-                    <span className={styles.telemetryLabel}>Forensic Artifacts</span>
+                    <span className={styles.telemetryLabel}>Fake Probability</span>
                     <span className={styles.telemetryValue} style={{ color: "#f43f5e" }}>
-                      {analysisResult.forensicNoise}
+                      {(analysisResult.fake_probability * 100).toFixed(2)}%
                     </span>
                   </div>
+
                   <div className={styles.telemetryItem}>
-                    <span className={styles.telemetryLabel}>Temporal Stability</span>
+                    <span className={styles.telemetryLabel}>Authentic Probability</span>
                     <span className={styles.telemetryValue} style={{ color: "#34d399" }}>
-                      {analysisResult.temporalStability}
+                      {(analysisResult.authentic_probability * 100).toFixed(2)}%
                     </span>
                   </div>
+
+                  <div className={styles.telemetryItem}>
+                    <span className={styles.telemetryLabel}>Model Logit</span>
+                    <span className={styles.telemetryValue} style={{ color: "#38bdf8" }}>
+                      {analysisResult.logit > 0 ? `+${analysisResult.logit.toFixed(4)}` : analysisResult.logit.toFixed(4)}
+                    </span>
+                  </div>
+
                   <div className={styles.telemetryItem}>
                     <span className={styles.telemetryLabel}>Gating Weight (α)</span>
                     <span className={styles.telemetryValue} style={{ color: "#c084fc" }}>
-                      {analysisResult.gateAlpha}
+                      {analysisResult.disagreement_alpha.toFixed(4)}
                     </span>
                   </div>
                 </div>
@@ -626,11 +968,7 @@ export default function DetectStudio() {
 
                   <button
                     className={styles.btnResetScan}
-                    onClick={() => {
-                      setAnalysisResult(null);
-                      setUploadedFile(null);
-                      setVideoPreviewUrl(null);
-                    }}
+                    onClick={removeSelectedVideo}
                   >
                     <span>Analyze Another Video</span>
                   </button>

@@ -67,6 +67,8 @@ def home():
     })
 
 
+import time
+
 @app.get("/health")
 def health():
     """Health check endpoint."""
@@ -77,6 +79,9 @@ def health():
         "checkpoint": str(CHECKPOINT_PATH.name)
         if CHECKPOINT_PATH.exists()
         else None,
+        "architecture": "B4BayarGatedDetector (DINOv2-small + BayarConv2d)",
+        "frames_required": 30,
+        "resolution": "224x224",
     })
 
 
@@ -110,6 +115,7 @@ def detect_video():
         }), 400
 
     temp_path = None
+    t_start = time.perf_counter()
 
     try:
         # Securely save uploaded video to temporary file
@@ -119,16 +125,27 @@ def detect_video():
             temp_path = temp_file.name
             uploaded_file.save(temp_path)
 
-        # Preprocess video into [1, 30, 3, 224, 224] tensor
-        video_tensor = preprocess_video(temp_path)
+        # 1. Preprocessing: MTCNN face extraction, tracking & 224x224 normalization
+        t_pre_start = time.perf_counter()
+        video_tensor, meta = preprocess_video(temp_path, return_metadata=True)
+        t_pre_end = time.perf_counter()
 
-        # Run forward inference through dual-branch SAGE architecture
+        # 2. Inference: Dual-branch SAGE forward pass & Disagreement Gated Fusion
+        t_inf_start = time.perf_counter()
         result = model_loader.predict(video_tensor)
+        t_inf_end = time.perf_counter()
 
-        # Calculate user-friendly confidence
+        t_total_end = time.perf_counter()
+
         fake_prob = result["fake_probability"]
         auth_prob = result["authentic_probability"]
         confidence_val = max(fake_prob, auth_prob)
+
+        timing_data = {
+            "preprocessing_ms": round((t_pre_end - t_pre_start) * 1000, 1),
+            "inference_ms": round((t_inf_end - t_inf_start) * 1000, 1),
+            "total_ms": round((t_total_end - t_start) * 1000, 1),
+        }
 
         return jsonify({
             "status": "success",
@@ -140,6 +157,15 @@ def detect_video():
             "disagreement_alpha": round(result["disagreement_alpha"], 4),
             "frames_analyzed": 30,
             "device": result["device"],
+            "timing": timing_data,
+            "metadata": {
+                "faces_detected_count": meta["faces_detected_count"],
+                "total_video_frames": meta["total_video_frames"],
+                "video_fps": meta["video_fps"],
+                "video_resolution": meta["video_resolution"],
+            },
+            "frame_thumbnails": meta["frame_thumbnails"],
+            "face_detections": meta["face_detections"],
         })
 
     except ValueError as exc:
