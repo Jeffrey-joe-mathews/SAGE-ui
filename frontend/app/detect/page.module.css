@@ -687,48 +687,135 @@
   box-shadow: 0 0 10px rgba(244, 63, 94, 0.6) !important;
 }
 
-/* Analysis Pipeline Stepper (Active State) */
+/* Analysis Pipeline Stepper (Active Dynamic State) */
 .pipelineStepper {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 18px 22px;
+  gap: 12px;
+  padding: 20px 24px;
   border-radius: 16px;
-  background: rgba(139, 92, 246, 0.08);
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(56, 189, 248, 0.08) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.15);
+  animation: fadeIn 0.3s ease;
 }
 
 .pipelineHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   font-size: 13.5px;
   color: #ffffff;
   font-weight: 700;
 }
 
+.pipelineHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipelineHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.pipelineTimerBadge {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #38bdf8;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pipelineTimerDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
+  animation: pulseDot 1s infinite;
+}
+
 .pipelineProgressTrack {
   width: 100%;
-  height: 8px;
+  height: 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   overflow: hidden;
+  position: relative;
 }
 
 .pipelineProgressFill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #38bdf8 0%, #a855f7 50%, #f43f5e 100%);
-  box-shadow: 0 0 12px rgba(168, 85, 247, 0.8);
-  transition: width 0.15s ease;
+  background: linear-gradient(
+    90deg,
+    #38bdf8 0%,
+    #818cf8 25%,
+    #c084fc 50%,
+    #f43f5e 75%,
+    #38bdf8 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerSweep 1.6s linear infinite;
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.6);
+  transition: width 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.pipelineProgressFillComplete {
+  background: #10b981 !important;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.8) !important;
+  animation: none !important;
+}
+
+@keyframes shimmerSweep {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .pipelineStepsList {
   display: flex;
   justify-content: space-between;
+  gap: 8px;
   font-size: 11px;
-  color: #94a3b8;
   font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.stepItemPending {
+  color: #64748b;
+  transition: all 0.25s ease;
+}
+
+.stepItemActive {
+  color: #38bdf8;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+  transform: scale(1.05);
+  transition: all 0.25s ease;
+}
+
+.stepItemDone {
+  color: #34d399;
+  font-weight: 600;
+  transition: all 0.25s ease;
 }
 
 /* Final Verdict Report Card */

@@ -25,6 +25,8 @@ export default function DetectStudio() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [activeStepText, setActiveStepText] = useState("");
+  const [activePhaseIndex, setActivePhaseIndex] = useState(0); // 0: MTCNN, 1: DINOv2, 2: Bayar, 3: Gate, 4: Done
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [activeFrameIndex, setActiveFrameIndex] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -32,6 +34,7 @@ export default function DetectStudio() {
 
   const fileInputRef = useRef(null);
   const videoElementRef = useRef(null);
+  const verdictRef = useRef(null);
 
   // 30 video frames array
   const filmFrames = Array.from({ length: 30 }, (_, i) => i);
@@ -212,28 +215,48 @@ export default function DetectStudio() {
       return;
     }
 
+    const startTime = Date.now();
     setIsAnalyzing(true);
-    setAnalysisProgress(12);
-    setActiveStepText("Step 1/4: Transferring video to SAGE forensic engine...");
+    setAnalysisProgress(6.0);
+    setActivePhaseIndex(0);
+    setActiveStepText("Step 1/4: Transferring video stream & initializing MTCNN...");
+    setElapsedSeconds(0);
     setAnalysisResult(null);
     setErrorMessage("");
 
-    // Step progress simulation while waiting for real HTTP response
+    // Dynamic asymptotic progress timer that continually advances and NEVER stalls
     const progressInterval = setInterval(() => {
-      setAnalysisProgress((prev) => {
-        if (prev < 35) {
-          setActiveStepText("Step 2/4: MTCNN 30-Frame Face Extraction & 224x224 Alignment...");
-          return prev + 8;
-        } else if (prev < 75) {
-          setActiveStepText("Step 3/4: Dual-Branch Forward Pass (DINOv2 Semantics + Bayar Conv)...");
-          return prev + 6;
-        } else if (prev < 92) {
-          setActiveStepText("Step 4/4: Disagreement α-Fusion & Final Blending Logit Computation...");
-          return prev + 2;
-        }
-        return prev;
-      });
-    }, 450);
+      const elapsed = (Date.now() - startTime) / 1000;
+      setElapsedSeconds(elapsed);
+
+      let currentVal = 6.0;
+      if (elapsed < 2.5) {
+        // Step 1: 6% to 35%
+        currentVal = 6.0 + (elapsed / 2.5) * 29.0;
+        setActivePhaseIndex(0);
+        setActiveStepText("Step 1/4: Decoding frames & MTCNN 30-frame face extraction...");
+      } else if (elapsed < 6.5) {
+        // Step 2: 35% to 68%
+        const sub = (elapsed - 2.5) / 4.0;
+        currentVal = 35.0 + sub * 33.0;
+        setActivePhaseIndex(1);
+        setActiveStepText("Step 2/4: SAGE DINOv2-small ViT Semantic Feature Extraction...");
+      } else if (elapsed < 10.5) {
+        // Step 3: 68% to 88%
+        const sub = (elapsed - 6.5) / 4.0;
+        currentVal = 68.0 + sub * 20.0;
+        setActivePhaseIndex(2);
+        setActiveStepText("Step 3/4: Bayar 5x5 Constrained Conv High-Frequency Filtering...");
+      } else {
+        // Step 4: 88% onwards - creeps smoothly towards 98.6% and NEVER stalls
+        const extra = elapsed - 10.5;
+        currentVal = 88.0 + 10.6 * (1.0 - Math.exp(-extra / 6.0));
+        setActivePhaseIndex(3);
+        setActiveStepText("Step 4/4: Disagreement α-Fusion & Final Blending Logit Computation...");
+      }
+
+      setAnalysisProgress(Math.min(98.6, Math.round(currentVal * 10) / 10));
+    }, 120);
 
     try {
       const formData = new FormData();
@@ -251,7 +274,14 @@ export default function DetectStudio() {
         throw new Error(data.error || `Server returned error (${response.status})`);
       }
 
+      // Smooth completion handshake
       setAnalysisProgress(100);
+      setActivePhaseIndex(4);
+      setActiveStepText("Step 4/4: Complete! Forensic verdict verified.");
+
+      // Brief 350ms delay so user visually appreciates 100% completion
+      await new Promise((resolve) => setTimeout(resolve, 350));
+
       setIsAnalyzing(false);
 
       setAnalysisResult({
@@ -274,6 +304,11 @@ export default function DetectStudio() {
       if (data.frame_thumbnails && data.frame_thumbnails.length > 0) {
         setPlayerViewMode("crop");
       }
+
+      // Smooth auto-scroll to the verdict
+      setTimeout(() => {
+        verdictRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
     } catch (err) {
       clearInterval(progressInterval);
       setIsAnalyzing(false);
@@ -822,22 +857,88 @@ export default function DetectStudio() {
             {isAnalyzing && (
               <div className={styles.pipelineStepper}>
                 <div className={styles.pipelineHeader}>
-                  <span>{activeStepText}</span>
-                  <span style={{ fontFamily: "var(--font-mono)", color: "#38bdf8" }}>
-                    {analysisProgress}%
-                  </span>
+                  <div className={styles.pipelineHeaderLeft}>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#38bdf8"
+                      strokeWidth="2.5"
+                      style={{ animation: "spin 1.2s linear infinite", flexShrink: 0 }}
+                    >
+                      <circle cx="12" cy="12" r="10" strokeOpacity="0.25"></circle>
+                      <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"></path>
+                    </svg>
+                    <span>{activeStepText}</span>
+                  </div>
+                  <div className={styles.pipelineHeaderRight}>
+                    <div className={styles.pipelineTimerBadge}>
+                      <span className={styles.pipelineTimerDot} />
+                      <span>{elapsedSeconds.toFixed(1)}s</span>
+                    </div>
+                    <span style={{ fontFamily: "var(--font-mono)", color: "#38bdf8", fontWeight: 800 }}>
+                      {analysisProgress.toFixed(1)}%
+                    </span>
+                  </div>
                 </div>
+
                 <div className={styles.pipelineProgressTrack}>
                   <div
-                    className={styles.pipelineProgressFill}
+                    className={
+                      analysisProgress >= 100
+                        ? `${styles.pipelineProgressFill} ${styles.pipelineProgressFillComplete}`
+                        : styles.pipelineProgressFill
+                    }
                     style={{ width: `${analysisProgress}%` }}
                   />
                 </div>
+
                 <div className={styles.pipelineStepsList}>
-                  <span>MTCNN Alignment</span>
-                  <span>DINOv2 Semantics</span>
-                  <span>Bayar High-Pass</span>
-                  <span>Gate Fusion</span>
+                  <span
+                    className={
+                      activePhaseIndex > 0
+                        ? styles.stepItemDone
+                        : activePhaseIndex === 0
+                        ? styles.stepItemActive
+                        : styles.stepItemPending
+                    }
+                  >
+                    {activePhaseIndex > 0 ? "✓ " : "• "}MTCNN Face Alignment
+                  </span>
+                  <span
+                    className={
+                      activePhaseIndex > 1
+                        ? styles.stepItemDone
+                        : activePhaseIndex === 1
+                        ? styles.stepItemActive
+                        : styles.stepItemPending
+                    }
+                  >
+                    {activePhaseIndex > 1 ? "✓ " : "• "}DINOv2 Semantics
+                  </span>
+                  <span
+                    className={
+                      activePhaseIndex > 2
+                        ? styles.stepItemDone
+                        : activePhaseIndex === 2
+                        ? styles.stepItemActive
+                        : styles.stepItemPending
+                    }
+                  >
+                    {activePhaseIndex > 2 ? "✓ " : "• "}Bayar High-Pass
+                  </span>
+                  <span
+                    className={
+                      activePhaseIndex > 3
+                        ? styles.stepItemDone
+                        : activePhaseIndex === 3
+                        ? styles.stepItemActive
+                        : styles.stepItemPending
+                    }
+                  >
+                    {activePhaseIndex > 3 ? "✓ " : "• "}Gate α-Fusion
+                  </span>
                 </div>
               </div>
             )}
@@ -845,6 +946,7 @@ export default function DetectStudio() {
             {/* Final Verdict Card (After Real Backend Analysis) */}
             {analysisResult && (
               <div
+                ref={verdictRef}
                 className={`${styles.verdictCard} ${
                   analysisResult.prediction === "FAKE"
                     ? styles.verdictFake
