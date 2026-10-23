@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
-from facenet_pytorch import MTCNN
+from facenet_pytorch import MTCNN, extract_face
 
 NUM_FRAMES = 30
 IMAGE_SIZE = 224
@@ -88,6 +88,9 @@ def preprocess_video(
         first_valid_face: Optional[torch.Tensor] = None
         last_valid_face: Optional[torch.Tensor] = None
 
+        # Scaling factor for ultra-fast face detection (max 640px dimension)
+        scale = 640.0 / max(width, height) if max(width, height) > 640 else 1.0
+
         for index in frame_indices:
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(index))
             success, frame = cap.read()
@@ -101,18 +104,36 @@ def preprocess_video(
                     f"Could not read frame at index {index} from video."
                 )
 
-            # Convert OpenCV BGR to RGB
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(rgb)
+            # Detect and extract face in single pass
+            face = None
+            box_info = None
+            conf_val = 0.99
 
-            # Detect bounding boxes & probability
-            boxes, probs = face_detector.detect(pil_image)
-
-            # Crop face with MTCNN (post_process=False returns float32 in [0, 255])
-            face = face_detector(pil_image)
+            if scale < 1.0:
+                small_w = int(width * scale)
+                small_h = int(height * scale)
+                small_frame = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
+                rgb_small = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+                boxes, probs = face_detector.detect(Image.fromarray(rgb_small))
+                if boxes is not None and len(boxes) > 0:
+                    best_idx = int(np.argmax(probs))
+                    orig_box = boxes[best_idx] / scale
+                    rgb_orig = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    face = extract_face(Image.fromarray(rgb_orig), orig_box, image_size=IMAGE_SIZE, margin=0)
+                    box_info = [round(float(x), 1) for x in orig_box]
+                    conf_val = float(probs[best_idx])
+            else:
+                rgb_orig = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_orig = Image.fromarray(rgb_orig)
+                boxes, probs = face_detector.detect(pil_orig)
+                if boxes is not None and len(boxes) > 0:
+                    best_idx = int(np.argmax(probs))
+                    face = extract_face(pil_orig, boxes[best_idx], image_size=IMAGE_SIZE, margin=0)
+                    box_info = [round(float(x), 1) for x in boxes[best_idx]]
+                    conf_val = float(probs[best_idx])
 
             if face is not None:
-                # MTCNN returns [3, 224, 224] float32 tensor with pixel values in [0.0, 255.0]
+                # extract_face returns [3, 224, 224] float32 tensor with pixel values in [0.0, 255.0]
                 # Normalizing by 255.0 brings values into [0.0, 1.0], matching transforms.ToTensor()
                 normalized_face = face.float() / 255.0
                 raw_frames.append(normalized_face)
@@ -120,12 +141,6 @@ def preprocess_video(
                 last_valid_face = normalized_face
                 if first_valid_face is None:
                     first_valid_face = normalized_face
-
-                box_info = None
-                conf_val = float(probs[0]) if probs is not None and len(probs) > 0 else 0.99
-                if boxes is not None and len(boxes) > 0:
-                    b = boxes[0]
-                    box_info = [round(float(x), 1) for x in b]
 
                 detections.append({
                     "detected": True,
